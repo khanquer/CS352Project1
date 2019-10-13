@@ -9,7 +9,20 @@ import sys
 # and received from
 
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
-    pass 
+    pass
+
+version = 0x1 # have to be filled in
+flags = 0 # have to be filled in
+opt_ptr = 0
+protocol = 0
+header_len = 0 # have to be filled in
+checksum = 0
+source_port = 0
+dest_port = 0
+sequence_num = 0 # have to be filled in
+ack_no = 0 # have to be filled in
+window = 0
+payload_len = 0 # have to be filled in
     
 class socket:
     
@@ -17,6 +30,7 @@ class socket:
         return
     
     def bind(self,address):
+
         return 
 
     def connect(self,address):  # fill in your code here 
@@ -33,11 +47,11 @@ class socket:
         return 
 
     def send(self,buffer):
-        bytessent = 0     # fill in your code here 
+        bytesent = 50    # fill in your code here 
         return bytesent 
 
     def recv(self,nbytes):
-        bytesreceived = 0     # fill in your code here
+        bytesreceived = 50   # fill in your code here
         return bytesreceived 
 
 
