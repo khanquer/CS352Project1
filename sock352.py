@@ -8,13 +8,22 @@ import sys
 # define the UDP ports all messages are sent
 # and received from
 
+portTx = 0
+portRx = 0
+
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
-    pass 
+	print(UDPportTx)
+	print(UDPportRx)
+	
+	portTx = UDPportTx
+	portRx = UDPportRx	
+	pass
     
 class socket:
     
     def __init__(self):  # fill in your code here 
-        return
+        self.sock = syssock.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	return
     
     def bind(self,address):
         return 
