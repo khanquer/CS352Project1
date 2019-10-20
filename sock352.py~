@@ -13,16 +13,16 @@ portTx = 0
 portRx = 0
 
 def init(UDPportTx,UDPportRx):   # initialize your UDP socket here 
-   print(UDPportTx)
-   print(UDPportRx)
-   global mainSocket, portTx, portRx
+	print(UDPportTx)
+	print(UDPportRx)
+	global mainSocket, portTx, portRx
 	
-   portTx = UDPportTx
-   portRx = UDPportRx
+	portTx = UDPportTx
+	portRx = UDPportRx
 	
-   mainSock = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
+	mainSock = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
 	
-   pass
+	pass
     
 class socket:
     
