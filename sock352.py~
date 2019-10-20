@@ -118,13 +118,23 @@ class socket:
             print(fileLen)
             mainSock.sendto(buffer,('',portRx))
             return
+            
+        
         print(type(buffer))
-        blist = []
-        print(buffer[0:maxBytes])
-        for bytee in buffer:
-            print('type = {}  |  val = {}'.format(type(bytee),bytee))
-            blist.append(bytee)
-        mainSock.sendto(buffer,('',portRx))
+        #print(buffer[0:maxBytes])
+        #for bytee in buffer:
+            #print('type = {}  |  val = {}'.format(type(bytee),bytee))
+        
+        startI = 0
+        endI = 0
+        while startI < fileLen:
+            endI = startI + maxBytes
+            if (endI >= fileLen):
+                mainSock.sendto(buffer[startI:],('',portRx))
+            else:
+                mainSock.sendto(buffer[startI:endI],('',portRx))
+            startI = startI + maxBytes
+        
         bytessent = 0     # fill in your code here 
         return 1 
 
@@ -139,7 +149,21 @@ class socket:
     	  	   print(fileLen[0])
     	  	   return fileLenPacked
     	  
-    	  buffer = mainSock.recv(100000)
+    	  
+    	  recvList = []
+    	  count = 0
+    	  b = bytearray()
+    	  while (True):
+    	      buffer = mainSock.recv(maxBytes)
+    	      b = 
+    	      for i in buffer:
+    	          recvList.append(i)
+    	          count = count + 1
+    	      
+    	      
+    	  #for i in buffer:
+    	  #    recvList.append(i)
+    	  #    count = count + 1
     	  #while (True):
     	  #    i = 1
     	  #bytesreceived = 0     # fill in your code here
