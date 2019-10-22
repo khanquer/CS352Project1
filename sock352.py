@@ -4,6 +4,8 @@ import struct
 import sys
 
 import random
+import threading
+import time
 
 # these functions are global to the class and
 # define the UDP ports all messages are sent
@@ -23,6 +25,11 @@ headerLen = 0x17
 seqNo = 0x00
 ackNo = 0x00
 payloadLen = 0x00
+
+sendable = False
+bfile = bytes()
+
+bytesreceived = 0
 
 flagsDict = {0x01:'SYN', 0x02:'FIN', 0x03:'DATA', 0x04:'ACK',\
          0x08:'SOCK352_RESET', 0xA0:'SOCK352_HAS_OPT'}
@@ -106,7 +113,7 @@ class socket:
     def send(self,buffer):
         print('SEND EXECUTED \n\t SOCK INFO : {}'.format(mainSock.getsockname()))
         
-        global fileLen, maxBytes
+        global fileLen, maxBytes, sendable, bfile
         global flag, headerLen, seqNo, ackNo, payloadLen
         
         if(fileLen == -1):
@@ -117,64 +124,122 @@ class socket:
             mainSock.sendto(buffer,('',portRx))
             return
             
+        bytessent = 0 
+        sendable = True
+        print('BUFFER LEN = {}'.format(len(buffer)))
+        bfile = buffer[0:len(buffer)]
+        t1 = threading.Thread(target = self.sendThread)
+        #t2 = threading.Thread(target = recvAckThread, args())
+        
+        
+        t1.start()
+        print('THREAD 1 STARTED')
+        #t2.start()
+        t1.join()
+        
+        
+        
+        return 1 
+
+    def recv(self,nbytes):
+        print('RECV EXECUTED \n\t SOCK INFO : {}'.format(mainSock.getsockname()))
+        global fileLen, maxBytes
+        global flag, headerLen, seqNo, ackNo, payloadLen
+    	  
+        if(fileLen == -1):
+            fileLenPacked = mainSock.recv(10)
+            longPacker = struct.Struct("!L")
+            fileLen = longPacker.unpack(fileLenPacked)
+            print(fileLen[0])
+            fileLen = fileLen[0]
+            return fileLenPacked
+    	  
+        t2 = threading.Thread(target = self.recvThread,args = ())
+        t2.start()
+        t2.join()
+    	  
+        return 1
+    
+    
+    #SEND PACKETS
+    def sendThread(self):
+        print('SEND THREAD EXECUTED')
         
         #aflag, seqNo, ackNo, payloadLen
+        global fileLen, maxBytes, sendable, bfile, bytesreceived
+        global flag, headerLen, seqNo, ackNo, payloadLen
         payloadLen = maxBytes-headerLen
-        
+    	  
         bytessent = 0
         startI = 0
         endI = startI + payloadLen
-        
-        while(bytessent < fileLen):
+        while (sendable == True and bytessent < fileLen):
             if (endI > fileLen):
                 endI = fileLen
                 payloadLen = endI - startI
             else:
                 endI = startI + payloadLen
-                
-            b = buffer[startI:endI]
+    	      
+            b = bfile[startI:endI]
             seqNo = seqNo + 1
             head = self.getPacketHeader(0x03,seqNo,0x00,payloadLen)
-            mainSock.sendto(head+b,('',portRx))
+            sendProb = random.randint(1,10)
+            if (sendProb > 4):
+                mainSock.sendto(head+b,('',portRx))
+                print('   SENT THIS PACKET : ')
+            else:
+                print('   DROPPED THIS PACKET : ')
+            self.openPacketHeader(head)
             startI = startI + payloadLen
             bytessent = bytessent + payloadLen
             # fill in your code here 
-        return 1 
-
-    def recv(self,nbytes):
-    	  print('RECV EXECUTED \n\t SOCK INFO : {}'.format(mainSock.getsockname()))
-    	  global fileLen, maxBytes
-    	  global flag, headerLen, seqNo, ackNo, payloadLen
+        return
+    
+    #LISTEN FOR ACKS FROM SERVER AND 
+    def recvAckThread():
+        #thread1.stop
+        pass
+        
+    #LISTEN FOR SEQ AND SEND BACK ACK 
+    def recvThread(self):
+        global fileLen, maxBytes, bytesreceived
+        global flag, headerLen, seqNo, ackNo, payloadLen
+        
     	  
-    	  if(fileLen == -1):
-    	  	   fileLenPacked = mainSock.recv(10)
-    	  	   longPacker = struct.Struct("!L")
-    	  	   fileLen = longPacker.unpack(fileLenPacked)
-    	  	   print(fileLen[0])
-    	  	   fileLen = fileLen[0]
-    	  	   return fileLenPacked
+        alldata = bytes()
+        bytesreceived = 0
     	  
-    	  
-    	  alldata = bytes()
-    	  bytesreceived = 0
-    	  while (bytesreceived < fileLen):
-    	      hplusb = mainSock.recv(maxBytes)
-    	      #print(hplusb)
-    	      (head,data) = self.stripPacket(hplusb)
-    	      [flags,headerLen,seqNo,ackNo,payload_len] = self.openPacketHeader(head)
-    	      # IF PACKET RECEIVED IS THE CORRECT ONE ELSE, SEND SAME ACK
-    	      ackNo = ackNo + 1
-    	      head = self.getPacketHeader(0x02,0x00,ackNo,payloadLen)
-    	      mainSock.sendto(head+b,('',portRx))
-    	      
-    	      bytesreceived += payload_len
-    	      alldata = alldata + data
-    	      print(bytesreceived)
-    	      
-    	  print(alldata)
-    	  
-    	  return alldata
-
+        while (True):
+            hplusb = mainSock.recv(maxBytes)
+            (head,data) = self.stripPacket(hplusb)
+            [flags,headerLen,recseqNo,recackNo,payload_len] = self.openPacketHeader(head)
+            
+            if (recseqNo != seqNo): # WRONG PACKET RECEIVED (packet loss)
+                print(' DROPPED PACKET   | Expected seqNo = {} | 	Received seqNo = {}'.
+                              format(seqNo,recseqNo))
+                print(' DROPPED PACKET   | Expected AckNo = {} | 	Received ackNo = {}'.
+                              format(ackNo,recackNo))
+                head = self.getPacketHeader(0x02,0x00,ackNo,payloadLen)
+                mainSock.sendto(head,('',portRx))
+                print('   SENT THIS ACK : ')
+                self.openPacketHeader(head)
+            else:
+                print(' RECEIVED PACKET')
+                ackNo = ackNo + 1
+                head = self.getPacketHeader(0x02,0x00,ackNo,payloadLen)
+                mainSock.sendto(head,('',portRx))
+                print('   SENT THIS ACK  ')
+                self.openPacketHeader(head)
+                bytesreceived += payload_len
+                alldata = alldata + data
+                print(bytesreceived)
+            
+        pass
+    	
+    	
+    	
+    	
+    	
     #aflag, seqNo, ackNo, payloadLen
     def getPacketHeader(self, aflag, seqNo, ackNo, payloadLen):
         version = 0x01
@@ -203,7 +268,9 @@ class socket:
         
         head = b[0:d]
         data = b[d:]
-        print(' HEAD = {}  |  data = {}'.format(head,data))
+        headopen = self.openPacketHeader(head)
+        print(' HEAD = {}'.format(headopen))
+        print(' DATA = {}'.format(data))
         return((head,data))
 
             
