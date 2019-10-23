@@ -18,7 +18,7 @@ cAddress = None
 
 
 fileLen = -1
-maxBytes = 200
+maxBytes = 320
 maxSend = 0
 gstartI = 0
 gseqNo = 0x00
@@ -88,7 +88,9 @@ class socket:
         print('RECEIVED SYNACK PACK FROM SERVER ')
         [flags,headerLen,s,a,payloadLen] = self.openPacketHeader(rec)
         ackNo = s
-        
+        #ackheader = self.getPacketHeader(0x04,0x00,s+1,0x00)
+        #mainSock.sendto(ackheader,('',portRx))
+        #print('SENT ACK PACK TO SERVER')
         print( ' CLIENT SEQNO = {}  |  ACKNO = {}  '.format(seqNo,ackNo))
         
         return 
@@ -117,6 +119,7 @@ class socket:
         
         mainSock.sendto(packet,('',portRx))
         print('SENT SYNPACK TO CLIENT ')
+        
         
         print( ' SERVER SEQNO = {}  |  ACKNO = {}  '.format(seqNo,ackNo))
         return(self,portRx)
@@ -252,7 +255,7 @@ class socket:
         startTime = 0
         endTime = 0
         startTime = time.clock()
-        mainSock.settimeout(.4)
+        mainSock.settimeout(.001)
         hplusb = bytes()
         timeout = False
         bytessuccess = 0
@@ -296,6 +299,7 @@ class socket:
             print('\t\t {}'.format(numpackets*maxSend))
             if (currentackNo >= finalseqNo):
                 done = True
+        print(finalseqNo)
         pass
         
     #LISTEN FOR SEQ AND SEND BACK ACK 
