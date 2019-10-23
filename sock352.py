@@ -1,7 +1,7 @@
 import binascii
 import socket as syssock
 import struct
-import sys
+import sys, os
 
 import random
 import threading
@@ -18,7 +18,7 @@ cAddress = None
 
 
 fileLen = -1
-maxBytes = 320
+maxBytes = 32000
 maxSend = 0
 gstartI = 0
 gseqNo = 0x00
@@ -38,6 +38,8 @@ ackNo = 0x00
 
 payloadLen = 0x00
 
+showPrint = False
+dropPackets = True
 
 bfile = bytes()
 alldata = bytes()
@@ -65,11 +67,23 @@ def init(UDPportTx,UDPportRx):   # initialize your UDP socket here
 class socket:
     def __init__(self):  # fill in your code here
         print('Initializing')
+        if (showPrint == False):
+            self.disablePrint()
+        else:
+            self.enablePrint()
+
         return
     def bind(self,address):
         print('Binding')
         #print(address)
         return 
+
+    #Connect implements the client end of the three-way handshake
+    #First sends a Syn pack to server
+    #Receives a Syn ack pack from server
+    #Then sends Ack packet to server
+    #This informs the socket what ACK to expect from the server by setting local Ack and Seq No
+ 
     def connect(self,address):  # fill in your code here 
         global mainSock, cAddress
         global flag, headerLen, seqNo, ackNo, payloadLen
@@ -88,16 +102,22 @@ class socket:
         print('RECEIVED SYNACK PACK FROM SERVER ')
         [flags,headerLen,s,a,payloadLen] = self.openPacketHeader(rec)
         ackNo = s
-        #ackheader = self.getPacketHeader(0x04,0x00,s+1,0x00)
-        #mainSock.sendto(ackheader,('',portRx))
-        #print('SENT ACK PACK TO SERVER')
+        ackheader = self.getPacketHeader(0x04,0x00,s+1,0x00)
+        mainSock.sendto(ackheader,('',portRx))
+        print('SENT ACK PACK TO SERVER')
         print( ' CLIENT SEQNO = {}  |  ACKNO = {}  '.format(seqNo,ackNo))
         
         return 
- 
+
+    #does nothing for now
     def listen(self,backlog):
         return
 
+    #Accept executes the server end's three way handshake
+    # First receives the syn packet from client, checks the flag to be SYN, records the sequence number and sets the ack as this
+    # Send the SYN ACK packet back using a random number for the Syn
+    # Receive ACK packet from the client
+    # Uses openPacketHeader and getPacketHeader to generate and parse packets 
     def accept(self):
         
         global mainSock        
@@ -120,12 +140,32 @@ class socket:
         mainSock.sendto(packet,('',portRx))
         print('SENT SYNPACK TO CLIENT ')
         
+        rec = mainSock.recv(4096)
+        print('RECEIVED ACK FROM CLIENT ')
         
         print( ' SERVER SEQNO = {}  |  ACKNO = {}  '.format(seqNo,ackNo))
         return(self,portRx)
     
-    def close(self):   # fill in your code here 
+    def close(self):   # fill in your code here
+        '''
+        mainSock.settimeout(0.5)
+        pkt = self.getPacketHeader(0x02,seqNo,0x00,0x00)
+        mainSock.sendto(pkt,('',portRx))
+        mainSock.recv(maxBytes)
+        finrecv = mainSock.recv(maxBytes)
+        ackpkt = self.getPacketHeader(0x04,0x00,0x00,0x00)
+        mainSock.send(ackpkt,('',portRx))
+        '''
         return 
+
+    '''
+        send does a few things
+        1. send the file length to the server
+        2. sends the file contents to the server
+        3. starts threads 1 and 3
+            * thread 1: controls the sending of the contents to the server
+            * thread 3: controls reciving of acknowledgements from server
+    '''
 
     def send(self,buffer):
         print('SEND EXECUTED \n\t SOCK INFO : {}'.format(mainSock.getsockname()))
@@ -163,7 +203,7 @@ class socket:
         t1.join()
         t3.join()        
         
-        
+        self.enablePrint()
         return 1 
 
     def recv(self,nbytes):
@@ -182,7 +222,8 @@ class socket:
         t2 = threading.Thread(target = self.recvThread,args = ())
         t2.start()
         t2.join()
-    	  
+    	
+        self.enablePrint()
         return alldata
     
     
@@ -221,7 +262,9 @@ class socket:
                 head = self.getPacketHeader(0x03,seqNo,0x00,payloadLen)
                 sendProb = random.randint(1,10)
                 #mainSock.sendto(head+b,('',portRx))
-                
+                if(dropPackets == False):
+                    sendProb = 10
+
                 if (sendProb > 3):
                     mainSock.sendto(head+b,('',portRx))
                     print('SENT THIS PACKET : ')
@@ -258,7 +301,7 @@ class socket:
         mainSock.settimeout(.001)
         hplusb = bytes()
         timeout = False
-        bytessuccess = 0
+        
         headerLen = 0
         while(not done):
             print('\trecvacklistening')
@@ -284,8 +327,8 @@ class socket:
             print('\tstartTime = {}  |  endTime = {}'.format(startTime,endTime))
             dt = endTime - startTime
             print('\tdt = {}'.format(dt))
-            if (dt > 0.0005): #NEED TO TIME OUT AND RESET SENDER
-                print('\tTIME OUT SEND THE FUCKING PACKET')
+            if (dt > timeoutDuration): #NEED TO TIME OUT AND RESET SENDER
+                print('\tTIME OUT SEND THE PACKET')
                 
                 gstartI = (currentackNo - firstseqNo)*(maxBytes-headerLen)
                 
@@ -319,18 +362,14 @@ class socket:
             [flags,headerLen,recseqNo,recackNo,payload_len] = self.openPacketHeader(head)
             
             if (recseqNo != ackNo): # WRONG PACKET RECEIVED (packet loss)
-                print(' DROPPED PACKET   | Expected seqNo = {} | 	Received seqNo = {}'.
-                              format(seqNo,recseqNo))
-                print(' DROPPED PACKET   | Expected AckNo = {} | 	Received ackNo = {}'.
-                              format(ackNo,recackNo))
-                head = self.getPacketHeader(0x02,0x00,ackNo,payloadLen)
+                head = self.getPacketHeader(0x04,0x00,ackNo,payloadLen)
                 mainSock.sendto(head,('',portRx))
                 print('SENT THIS ACK : seqNo = {}  |  ackNo = {} \n'.format(0,ackNo))
                
             else:
                 print(' RECEIVED CORRECT PACKET')
                 ackNo = ackNo + 1
-                head = self.getPacketHeader(0x02,0x00,ackNo,payloadLen)
+                head = self.getPacketHeader(0x04,0x00,ackNo,payloadLen)
                 mainSock.sendto(head,('',portRx))
                 print('SENT THIS ACK : seqNo = {}  | ackNo = {} \n '.format(0,ackNo))
                 bytesreceived += payload_len
@@ -342,34 +381,39 @@ class socket:
         pass
     	
     	
-    	
-    	
-    	
     #aflag, seqNo, ackNo, payloadLen
     def getPacketHeader(self, aflag, seqNo, ackNo, payloadLen):
-        version = 0x01
+        
         flags = aflag
-        headerLen= 0x17
+        #headerLen= 0x17
         sequence_no = seqNo
         ack_no = ackNo
         payload_len = payloadLen
         
-        # = 1 + 2 + 8 + 8 + 4
-        head = struct.pack('!bhqql',flags,headerLen,seqNo,ackNo,payloadLen)
+        version = 0x01
+        opt_ptr = 0x00
+        protocol = 0x00
+        checksum = 0x00
+        source_port = 0x00
+        dest_port = 0x00
+        window = 0x00
+        
+        headerLen = struct.calcsize('!BHQQLBBBHLLL')
+        head = struct.pack('!BHQQLBBBHLLL',flags,headerLen,seqNo,ackNo,payloadLen,version,opt_ptr,protocol,checksum,source_port,dest_port,window)
         
         return head
         
     def openPacketHeader(self, packet):
-        l = struct.unpack('!bhqql',packet)
-        [flags,headerLen,seqNo,ackNo,payload_len] = l
+        l = struct.unpack('!BHQQLBBBHLLL',packet)
+        [flags,headerLen,seqNo,ackNo,payload_len,version,opt_ptr,protocol,checksum,source_port,dest_port,window] = l
+        sl = l[0:5]
         #print(l)
-        return l
+        return sl
     
     def stripPacket(self, b):
-        #print('STRIPPING PACKET')
-        d = b[1]*8 + b[2]
-        #print(' d = {}'.format(d))
         
+        global headerLen
+        d = headerLen
         head = b[0:d]
         data = b[d:]
         headopen = self.openPacketHeader(head)
@@ -377,5 +421,8 @@ class socket:
         #print(' DATA = {}'.format(data))
         return((head,data))
 
-            
-            
+    def enablePrint(self):
+        sys.stdout = sys.__stdout__
+
+    def disablePrint(self):
+        sys.stdout = open(os.devnull,'w')
