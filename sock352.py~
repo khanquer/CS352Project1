@@ -18,7 +18,7 @@ cAddress = None
 
 
 fileLen = -1
-maxBytes = 300
+maxBytes = 200
 gstartI = 0
 done = False
 
@@ -178,7 +178,7 @@ class socket:
         print('SEND THREAD EXECUTED')
         
         #aflag, seqNo, ackNo, payloadLen
-        global fileLen, maxBytes, bfile, bytesreceived, gstartI, done, startChanged
+        global fileLen, maxBytes, bfile, bytesreceived, done #gstartI,startChanged
         global flag, headerLen, seqNo, ackNo, payloadLen
         payloadLen = maxBytes-headerLen
     	  
@@ -199,7 +199,7 @@ class socket:
                 sendProb = random.randint(1,10)
                 #mainSock.sendto(head+b,('',portRx))
                 
-                if (sendProb > 2):
+                if (sendProb > 3):
                     mainSock.sendto(head+b,('',portRx))
                     print('   SENT THIS PACKET : ')
                 else:
@@ -208,6 +208,7 @@ class socket:
                 #print('   SENT THIS PACKET : ')
                 self.openPacketHeader(head)
                 print('\t INDICES | startI = {} | endI = {}'.format(startI,endI))
+                global gstartI,startChanged
                 if (startChanged == True):
                     startI = gstartI
                 else: 
@@ -216,10 +217,10 @@ class socket:
                 bytessent = bytessent + payloadLen
                 # fill in your code here 
             else:
-                print(startI,startChanged,gstartI)
+                
                 if(startChanged == True):
+                    print('\n',startI,startChanged,gstartI)
                     startI = gstartI
-                time.sleep(3)
         return
     
     #LISTEN FOR ACKS FROM SERVER AND 
@@ -230,7 +231,9 @@ class socket:
         startTime = 0
         endTime = 0
         startTime = time.clock()
-        mainSock.settimeout(2)
+        mainSock.settimeout(.1)
+        hplusb = bytes()
+
         while(not done):
             print('recvacklistening')
             
@@ -255,8 +258,9 @@ class socket:
             if (dt > 0.01): #NEED TO TIME OUT AND RESET SENDER
                 print('TIME OUT SEND THE FUCKING PACKET')
                 gstartI = (currentackNo - firstseqNo)*maxBytes
-                print('\t\t gstartI = {}  | start is CHANGED '.format(gstartI))
+                
                 startChanged = True
+                print('\t\t firstseqNo = {} |  gstartI = {}  | startChanged = {}'.format(firstseqNo,gstartI,startChanged))
                             
             numpackets = (currentackNo - firstseqNo)
             print('\t NUMBER OF PACKETS SENT (ACK RECEIVED) = {}'.format(numpackets))
@@ -275,6 +279,7 @@ class socket:
         bytesreceived = 0
     	  
         while (not done):
+            print('LISTENING TO INPUTS')
             hplusb = mainSock.recv(maxBytes)
             (head,data) = self.stripPacket(hplusb)
             print('\nPACKET THAT WAS RECEIVED')
@@ -298,10 +303,10 @@ class socket:
                 self.openPacketHeader(head)
                 bytesreceived += payload_len
                 alldata = alldata + data
-                print(bytesreceived)
+                print(' BYTES RECEIVED = {} '.format(bytesreceived))
             
-            if (bytesreceived >= fileLen):
-                done = True
+            #if (bytesreceived >= fileLen):
+                #done = True
         pass
     	
     	
