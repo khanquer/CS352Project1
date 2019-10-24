@@ -147,15 +147,33 @@ class socket:
         return(self,portRx)
     
     def close(self):   # fill in your code here
-        '''
+        
+        pktReceived = False
         mainSock.settimeout(0.5)
-        pkt = self.getPacketHeader(0x02,seqNo,0x00,0x00)
-        mainSock.sendto(pkt,('',portRx))
-        mainSock.recv(maxBytes)
-        finrecv = mainSock.recv(maxBytes)
-        ackpkt = self.getPacketHeader(0x04,0x00,0x00,0x00)
-        mainSock.send(ackpkt,('',portRx))
-        '''
+        finpkt = self.getPacketHeader(0x02,seqNo+1,0x00,0x00)
+        
+        while (not pktReceived):
+            try:
+                receivedpkt = mainSock.recv(maxBytes)
+                pktReceived = True
+            except syssock.timeout:
+                mainSock.sendto(finpkt,('',portRx))
+        receivedOpen = self.openPacketHeader(receivedpkt)
+        rflag = receivedOpen[0]
+        seq = receivedOpen[2]
+        #print(receivedOpen[0],receivedOpen[2])
+        ackpkt = self.getPacketHeader(0x04,seqNo+1,seq+1,0x00)
+        finpkt2 = self.getPacketHeader(0x02,seqNo+1,0x00,0x00)
+        
+        if(flagsDict.get(rflag) == 'FIN'):#You are the fin receiver
+            mainSock.sendto(ackpkt,('',portRx))
+            mainSock.sendto(finpkt2,('',portRx))
+            mainSock.recv(maxBytes)
+        else: #FIN INITIATOR
+            mainSock.recv(maxBytes)
+            mainSock.sendto(ackpkt,('',portRx))
+        
+        print('CONNECTION CLOSED USING DOUBLE HANDSHAKE')
         return 
 
     '''
